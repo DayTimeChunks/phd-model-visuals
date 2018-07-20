@@ -1,0 +1,24 @@
+.idea/*
+.idea/workspace.xml
+.idea/misc.xml
+.idea/pesti-beach16.iml
+
+
+DataInput/LayerGeneration
+DataInput/dotMap/old
+DataInput/dotMap/sylvain
+
+WriteUp/LargeFiles
+DataSource/LargeFiles
+
+Analysis/Old
+Analysis/plotlycred.py
+Analysis/*.png
+./Analysis/*.png
+
+# Compiled docs
+*.pyc
+Analysis/*.pyc
+model_v10/*.pyc
+
+
