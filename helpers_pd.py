@@ -4,8 +4,11 @@ import numpy as np
 import pickle
 
 
-def get_data(gen="Gen1"):
-    filename = "results" + gen + '_copy.p'
+def get_data(gen="Gen1", v=None):
+    if v is None:
+        filename = "results" + gen + '_copy.p'
+    else:
+        filename = "results" + gen + '_copy' + v + '.p'
     res = pickle.load(open(filename, "rb"))
     return pd.DataFrame.from_dict(res, orient='index')
 
@@ -52,6 +55,40 @@ def BlkIso(row, cst):
         val = "NC"
     else:
         val = "Missed"
+    return val
+
+
+def TraIso(row, cst):
+    if row['KGE-d13C-tra'] >= cst:
+        val = "WC"
+    elif row['KGE-d13C-tra'] < cst:
+        val = "NC"
+    else:
+        val = "Missed"
+    return val
+
+
+def DetIso(row, cst):
+    if row['KGE-d13C-det'] >= cst:
+        val = "WC"
+    elif row['KGE-d13C-det'] < cst:
+        val = "NC"
+    else:
+        val = "Missed"
+    return val
+
+
+def LevelIso(row, metric):
+    if row[metric] >= 0.8:
+        val = metric + ' > ' + str(0.8)
+    elif row[metric] >= 0.7:
+        val = metric + ' > ' + str(0.7)
+    elif row[metric] >= 0.6:
+        val = metric + ' > ' + str(0.6)
+    elif row[metric] >= 0.5:
+        val = metric + ' > ' + str(0.5)
+    else:
+        val = metric + ' < ' + str(0.5)
     return val
 
 
@@ -270,4 +307,94 @@ def get_stats_df(df):
     return df[['Jdays', 'mean', 'sd', 'high', 'low', 'max', 'min']]
 
 
+"""
+Metrics
+"""
 
+
+def get_sets_metrics(name_list, path, filename, vname):
+    sets = []
+    for i in range(len(name_list)):
+        # Define variable name
+        series_name = vname + name_list[i][3:]  # Variable + set's name
+        # Get sim TSS
+        sim = pd.read_table(path + name_list[i] + filename,
+                            skiprows=4, delim_whitespace=True,
+                            names=['Jdays', 'sim'],
+                            header=None
+                            )
+        if vname is not "PER":
+            sim[series_name] = sim['sim'].cumsum()
+
+            if vname is "VOL":
+                sim[series_name] *= 100
+
+                # TODO: Add heavy fraction for mass exports
+                #             if vname == "EXP":
+                #                 filename = "resM_EXP_heavy_g.tss"
+                #                 h = pd.read_table(name_list[i] + filename,
+                #                        skiprows=4, delim_whitespace=True,
+                #                                     names=['Jdays', 'simh'],
+                #                                     header=None)
+                # Cumsum, Merge and add heavy
+
+        else:
+            # TODO: Add heavy fraction for persistent mass
+            sim[series_name] = sim['sim']
+
+        sim = sim[['Jdays', series_name]]
+        sim = sim[0:121]
+        sets.append(sim)
+    df = reduce(lambda left, right: pd.merge(left, right, on='Jdays'), sets)
+    return df
+
+
+def roofed(row):
+    if row['value'] > 100.:
+        val = 100.
+    else:
+        val = row['value']
+    return val
+
+
+def pct_df(df, metric, app, cst='WC', high='high', low='low'):
+    sim = pd.merge(app, df, how='inner', on='Jdays')
+
+    prct = 100.
+    sim[str(metric + '_95%')] = prct * (sim[high] / sim['Capp'])
+    sim[str(metric + '_50%')] = prct * (sim['mean'] / sim['Capp'])
+    sim[str(metric + '_05%')] = prct * (sim[low] / sim['Capp'])
+
+    sim = sim.loc[5:, ]  # Get rid of divisions by zero
+
+    sim = sim[['Jdays', str(metric + '_95%'), str(metric + '_50%'), str(metric + '_05%')]]
+    sim = pd.melt(sim, id_vars=['Jdays'],
+                  value_vars=[str(metric + '_95%'), str(metric + '_50%'), str(metric + '_05%')])
+    sim['Type'] = sim.apply(lambda row: ModelType(row, cst), axis=1)
+
+    sim['value'] = sim.apply(lambda row: roofed(row), axis=1)
+
+    sim['Jdays'] = sim['Jdays'] - 171
+    return sim
+
+
+def count_conc(row):
+    if row['high'] >= row['ug.g']:
+        if row['low'] <= row['ug.g']:
+            value = 1.
+        else:
+            value = 0.
+    else:
+        value = 0.
+    return value
+
+
+def count_delta(row):
+    if row['high'] >= row['d13C']:
+        if row['low'] <= row['d13C']:
+            value = 1.
+        else:
+            value = 0.
+    else:
+        value = 0.
+    return value
